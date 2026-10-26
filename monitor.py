@@ -28,7 +28,8 @@ PART_NAMES = {
     "MK1H4LL/A": "iPhone Duo 512GB Night Sky",
 }
 BUY_URL = "https://www.apple.com/shop/buy-iphone/iphone-duo"
-FULFILLMENT_URL = "https://www.apple.com/shop/fulfillment-messages"
+# fulfillment-messages 接口会对 GitHub 服务器返回 541，旧的 pickup-message 接口可用
+PICKUP_URL = "https://www.apple.com/shop/retail/pickup-message"
 HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 "
@@ -57,15 +58,15 @@ def env(name, default=None, required=False):
 
 def fetch_availability(zip_code, parts):
     """返回 (location, [store, ...])，每个 store 是 Apple 接口里的原始字典。"""
-    query = {"fae": "true", "pl": "true", "mts.0": "regular", "mts.1": "compact",
-             "searchNearby": "true", "location": zip_code}
+    query = {"pl": "true", "location": zip_code}
     for i, part in enumerate(parts):
         query[f"parts.{i}"] = part
-    url = FULFILLMENT_URL + "?" + urllib.parse.urlencode(query)
+    url = PICKUP_URL + "?" + urllib.parse.urlencode(query)
     req = urllib.request.Request(url, headers=HEADERS)
     with urllib.request.urlopen(req, timeout=20) as resp:
         data = json.load(resp)
-    pickup = (data.get("body") or {}).get("content", {}).get("pickupMessage") or {}
+    body = data.get("body") or {}
+    pickup = body.get("content", {}).get("pickupMessage") or body
     if pickup.get("errorMessage"):
         raise RuntimeError(f"Apple 返回错误：{pickup['errorMessage']}")
     stores = pickup.get("stores")
@@ -94,8 +95,9 @@ def available_items(stores, parts, max_miles):
             info = (store.get("partsAvailability") or {}).get(part)
             if not info or info.get("pickupDisplay") != "available":
                 continue
-            title = (((info.get("messageTypes") or {}).get("regular") or {})
-                     .get("storePickupProductTitle")) or PART_NAMES.get(part, part)
+            title = (info.get("storePickupProductTitle")
+                     or ((info.get("messageTypes") or {}).get("regular") or {}).get("storePickupProductTitle")
+                     or PART_NAMES.get(part, part))
             found[(store.get("storeNumber"), part)] = {
                 "store": store.get("storeName") or store.get("storeNumber"),
                 "city": store.get("city") or "",

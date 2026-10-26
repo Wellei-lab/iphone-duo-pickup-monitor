@@ -57,5 +57,11 @@ get("当前参数 AirPods 对照", fulfillment([AIRPODS]))
 get("带 cookie AirPods 对照", fulfillment([AIRPODS]), use_cookies=True)
 if found:
     get("购买页第一个型号", fulfillment(found[:1]), use_cookies=True)
-get("旧接口 pickup-message", "https://www.apple.com/shop/retail/pickup-message?"
-    + urllib.parse.urlencode({"pl": "true", "parts.0": PARTS[0], "location": ZIP}), use_cookies=True)
+raw = get("旧接口 pickup-message", "https://www.apple.com/shop/retail/pickup-message?"
+          + urllib.parse.urlencode({"pl": "true", "parts.0": PARTS[0], "parts.1": PARTS[1], "location": ZIP}))
+if raw:
+    import json
+    stores = json.loads(raw)["body"]["stores"]
+    first = {k: v for k, v in stores[0].items() if k in (
+        "storeName", "storeNumber", "city", "storedistance", "storeDistanceWithUnit", "partsAvailability")}
+    print("第一家门店：", json.dumps(first, ensure_ascii=False)[:1500])
