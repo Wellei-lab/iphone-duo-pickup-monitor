@@ -64,4 +64,8 @@ if raw:
     stores = json.loads(raw)["body"]["stores"]
     first = {k: v for k, v in stores[0].items() if k in (
         "storeName", "storeNumber", "city", "storedistance", "storeDistanceWithUnit", "partsAvailability")}
-    print("第一家门店：", json.dumps(first, ensure_ascii=False)[:1500])
+    print("第一家门店：", json.dumps(first, ensure_ascii=False)[:600])
+    for st in stores:
+        small = {k: v for k, v in st.items() if not isinstance(v, (dict, list)) and "distance" in k.lower()}
+        print("门店：", st.get("storeName"), st.get("city"), small)
+    print("门店字段：", sorted(stores[0].keys()))
