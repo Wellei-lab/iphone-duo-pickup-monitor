@@ -29,10 +29,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Skip if another run is already monitoring
+      - name: Skip if not configured or already monitoring
         id: guard
-        if: ${{ !inputs.chained && !inputs.test_notify }}
+        env:
+          ZIP: ${{ secrets.ZIP }}
+          BARK_KEY: ${{ secrets.BARK_KEY }}
         run: |
+          if [ -z "$ZIP" ] || [ -z "$BARK_KEY" ]; then
+            echo "::warning::还没设置 Secrets ZIP 和 BARK_KEY，跳过"
+            echo "skip=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          if [ "${{ inputs.chained }}" = "true" ] || [ "${{ inputs.test_notify }}" = "true" ]; then exit 0; fi
           others=0
           for status in in_progress queued; do
             n=$(gh api "repos/${{ github.repository }}/actions/workflows/monitor.yml/runs?status=$status&per_page=20" \
