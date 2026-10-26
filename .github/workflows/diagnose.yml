@@ -1,0 +1,14 @@
+name: Diagnose Apple API
+
+on:
+  workflow_dispatch:
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 tools/diagnose.py
+        env:
+          ZIP: ${{ secrets.ZIP }}
