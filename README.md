@@ -21,7 +21,7 @@
      - `MAX_MILES`：只提醒多少英里以内的门店，默认 `35`，填 `0` 表示不限
      - `STATES`：只提醒哪些州的门店，默认 `NY`（排除长岛对岸的康涅狄格州门店）
      - `EXTRA_LOCATIONS`：额外查询的邮编，默认 `10001`（曼哈顿）。Apple 每次只返回最近的 12 家店，加上曼哈顿能覆盖纽约市除 Staten Island 外的 11 家
-     - `INTERVAL_PLAN`：按纽约时间分时段的查询间隔，默认 `0-6:120,6-11:60`（夜里 120 秒，早上高峰 60 秒，其余 60 秒）
+     - `INTERVAL_PLAN`：按纽约时间分时段的查询间隔，默认 `0-6:120,6-11:45`（夜里 120 秒，早上高峰 45 秒，其余 60 秒）
      - `PARTS`：改监控型号，逗号分隔
      - `BARK_LEVEL`：`critical` 表示静音/专注模式下也响（需要在 Bark 里允许重要提醒）
 3. **Actions** 页面 → 左侧 *iPhone Duo pickup monitor* → **Run workflow**，勾选 `test_notify` 运行一次。手机收到“iPhone Duo 监控测试”就说明推送和 Apple 查询都通了。

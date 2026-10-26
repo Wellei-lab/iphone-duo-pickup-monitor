@@ -59,8 +59,8 @@ jobs:
           MAX_MILES: ${{ vars.MAX_MILES || '35' }}
           STATES: ${{ vars.STATES || 'NY' }}
           EXTRA_LOCATIONS: ${{ vars.EXTRA_LOCATIONS || '10001' }}
-          # 纽约时间 0–6 点放慢；6–11 点是补货高峰，确认不被限流后再调快
-          INTERVAL_PLAN: ${{ vars.INTERVAL_PLAN || '0-6:120,6-11:60' }}
+          # 纽约时间 0–6 点放慢；6–11 点是补货高峰加快（每分钟 1 次已验证 81 次无限流）
+          INTERVAL_PLAN: ${{ vars.INTERVAL_PLAN || '0-6:120,6-11:45' }}
           BARK_LEVEL: ${{ vars.BARK_LEVEL }}
           BARK_KEY: ${{ secrets.BARK_KEY }}
           TEST_NOTIFY: ${{ inputs.test_notify }}
