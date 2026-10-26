@@ -4,6 +4,7 @@
 只用 Python 标准库。所有配置都从环境变量读取：
 
   ZIP            必填，美国邮编（在 GitHub 上存成 Secret，避免出现在公开日志里）
+  EXTRA_LOCATIONS 额外查询的邮编，逗号分隔，例如 10001,11201（Apple 每次只返回最近的 12 家店）
   BARK_KEY       必填，Bark App 里的设备 key（URL 里 https://api.day.app/ 后面那串）
   PARTS          要监控的型号，逗号分隔，默认 iPhone Duo 512GB 两种颜色
   INTERVAL       查询间隔秒数，默认 60
@@ -146,15 +147,20 @@ def describe(item):
     return " · ".join(parts)
 
 
-def check_once(zip_code, parts, max_miles, states):
-    _, stores = fetch_availability(zip_code, parts)
-    found = available_items(stores, parts, max_miles, states)
-    log(f"查询 {len(stores)} 家门店，可取货 {len(found)} 项")
+def check_once(locations, parts, max_miles, states):
+    """依次查询每个位置，距离按各自位置计算，结果按 (门店, 型号) 合并。"""
+    found, seen = {}, set()
+    for loc in locations:
+        _, stores = fetch_availability(loc, parts)
+        seen.update(s.get("storeNumber") for s in stores)
+        found.update(available_items(stores, parts, max_miles, states))
+    log(f"查询 {len(seen)} 家门店，可取货 {len(found)} 项")
     return found
 
 
 def main():
     zip_code = env("ZIP", required=True)
+    locations = [zip_code] + [z.strip() for z in env("EXTRA_LOCATIONS", "").split(",") if z.strip()]
     env("BARK_KEY", required=True)
     parts = [p.strip() for p in env("PARTS", DEFAULT_PARTS).split(",") if p.strip()]
     interval = int(env("INTERVAL", "60"))
@@ -165,7 +171,7 @@ def main():
 
     if env("TEST_NOTIFY", "false").lower() == "true":
         try:
-            found = check_once(zip_code, parts, max_miles, states)
+            found = check_once(locations, parts, max_miles, states)
             body = "\n".join(describe(i) for i in found.values()) or "当前附近门店都不能取货"
         except Exception as exc:
             body = f"查询 Apple 失败：{exc}"
@@ -180,7 +186,7 @@ def main():
     while time.monotonic() < deadline:
         started = time.monotonic()
         try:
-            found = check_once(zip_code, parts, max_miles, states)
+            found = check_once(locations, parts, max_miles, states)
             failures, error_alerted = 0, False
             new = [found[k] for k in found if k not in notified]
             if new:

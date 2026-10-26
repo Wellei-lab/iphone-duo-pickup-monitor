@@ -58,6 +58,7 @@ jobs:
           PARTS: ${{ vars.PARTS }}
           MAX_MILES: ${{ vars.MAX_MILES || '35' }}
           STATES: ${{ vars.STATES || 'NY' }}
+          EXTRA_LOCATIONS: ${{ vars.EXTRA_LOCATIONS || '10001,11201' }}
           BARK_LEVEL: ${{ vars.BARK_LEVEL }}
           BARK_KEY: ${{ secrets.BARK_KEY }}
           TEST_NOTIFY: ${{ inputs.test_notify }}
