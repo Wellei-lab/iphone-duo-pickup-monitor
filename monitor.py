@@ -163,6 +163,7 @@ def main():
             body = "\n".join(describe(i) for i in found.values()) or "当前附近门店都不能取货"
         except Exception as exc:
             body = f"查询 Apple 失败：{exc}"
+        log(body)
         bark("iPhone Duo 监控测试", body)
         return
 
