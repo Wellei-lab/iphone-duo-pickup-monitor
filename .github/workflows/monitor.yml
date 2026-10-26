@@ -1,0 +1,59 @@
+name: iPhone Duo pickup monitor
+
+on:
+  # 每 20 分钟检查一次监控是否在跑；正常情况下由上一轮运行结束时接力启动，
+  # 这里只是兜底（接力断了、第一次启动）
+  schedule:
+    - cron: "7,27,47 * * * *"
+  workflow_dispatch:
+    inputs:
+      test_notify:
+        description: "只发一条测试推送并查询一次库存"
+        type: boolean
+        default: false
+      chained:
+        description: "内部使用：由上一轮接力启动"
+        type: boolean
+        default: false
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 355
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Skip if another run is already monitoring
+        id: guard
+        if: ${{ !inputs.chained && !inputs.test_notify }}
+        run: |
+          others=0
+          for status in in_progress queued; do
+            n=$(gh api "repos/${{ github.repository }}/actions/workflows/monitor.yml/runs?status=$status&per_page=20" \
+                  --jq "[.workflow_runs[] | select(.id != ${{ github.run_id }})] | length")
+            others=$((others + n))
+          done
+          echo "other active runs: $others"
+          if [ "$others" -gt 0 ]; then echo "skip=true" >> "$GITHUB_OUTPUT"; fi
+
+      - name: Monitor
+        id: monitor
+        if: ${{ steps.guard.outputs.skip != 'true' }}
+        run: python3 monitor.py
+        env:
+          ZIP: ${{ secrets.ZIP }}
+          PARTS: ${{ vars.PARTS }}
+          MAX_MILES: ${{ vars.MAX_MILES }}
+          BARK_LEVEL: ${{ vars.BARK_LEVEL }}
+          BARK_KEY: ${{ secrets.BARK_KEY }}
+          TEST_NOTIFY: ${{ inputs.test_notify }}
+
+      - name: Start next run
+        if: ${{ steps.monitor.outcome == 'success' && !inputs.test_notify }}
+        run: gh workflow run monitor.yml --ref "${{ github.ref_name }}" -f chained=true
