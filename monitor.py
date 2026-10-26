@@ -20,6 +20,7 @@ import json
 import os
 import sys
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
@@ -41,7 +42,8 @@ HEADERS = {
     "Accept-Language": "en-US,en;q=0.9",
     "Referer": BUY_URL,
 }
-ERROR_ALERT_AFTER = 10  # 连续失败多少次后推送一次“监控异常”
+ERROR_ALERT_AFTER = 45 * 60  # 连续这么多秒没有一次查询成功，才推送“监控异常”
+BLOCKED_BACKOFF = 5 * 60  # 被 Apple 限流（HTTP 541）后暂停这么多秒再试
 
 
 def log(msg):
@@ -147,20 +149,29 @@ def describe(item):
     return " · ".join(parts)
 
 
-def check_once(locations, parts, max_miles, states):
-    """依次查询每个位置，距离按各自位置计算，结果按 (门店, 型号) 合并。"""
-    found, seen = {}, set()
-    for loc in locations:
-        _, stores = fetch_availability(loc, parts)
-        seen.update(s.get("storeNumber") for s in stores)
-        found.update(available_items(stores, parts, max_miles, states))
-    log(f"查询 {len(seen)} 家门店，可取货 {len(found)} 项")
-    return found
+def check_once(location, label, parts, max_miles, states):
+    """查询一个位置，返回 (可取货 {(门店, 型号): 描述}, 本次返回的门店编号集合)。"""
+    _, stores = fetch_availability(location, parts)
+    found = available_items(stores, parts, max_miles, states)
+    log(f"查询{label} {len(stores)} 家门店，可取货 {len(found)} 项")
+    return found, {s.get("storeNumber") for s in stores}
+
+
+def rotation(zip_code, extras):
+    """每次只查一个位置，家附近和额外位置交替：家, 额外1, 家, 额外2, ...
+
+    Apple 大约 20 分钟内收到 60 次请求就会限流 30 分钟，所以每分钟只发一次请求。
+    """
+    home = (zip_code, "家附近")
+    if not extras:
+        return [home]
+    return [x for extra in extras for x in (home, (extra, extra))]
 
 
 def main():
     zip_code = env("ZIP", required=True)
-    locations = [zip_code] + [z.strip() for z in env("EXTRA_LOCATIONS", "").split(",") if z.strip()]
+    extras = [z.strip() for z in env("EXTRA_LOCATIONS", "").split(",") if z.strip()]
+    schedule = rotation(zip_code, extras)
     env("BARK_KEY", required=True)
     parts = [p.strip() for p in env("PARTS", DEFAULT_PARTS).split(",") if p.strip()]
     interval = int(env("INTERVAL", "60"))
@@ -171,7 +182,9 @@ def main():
 
     if env("TEST_NOTIFY", "false").lower() == "true":
         try:
-            found = check_once(locations, parts, max_miles, states)
+            found = {}
+            for loc, label in dict(schedule).items():
+                found.update(check_once(loc, label, parts, max_miles, states)[0])
             body = "\n".join(describe(i) for i in found.values()) or "当前附近门店都不能取货"
         except Exception as exc:
             body = f"查询 Apple 失败：{exc}"
@@ -180,28 +193,38 @@ def main():
         return
 
     notified = set()  # 已提醒过且仍有货的 (门店, 型号)，没货后移除，下次补货再提醒
-    failures = 0
+    last_ok = time.monotonic()
     error_alerted = False
+    step = 0
     deadline = time.monotonic() + duration
     while time.monotonic() < deadline:
         started = time.monotonic()
+        wait = interval
+        loc, label = schedule[step % len(schedule)]
         try:
-            found = check_once(locations, parts, max_miles, states)
-            failures, error_alerted = 0, False
+            found, seen = check_once(loc, label, parts, max_miles, states)
+            step += 1
+            last_ok, error_alerted = time.monotonic(), False
+            # 这次返回的门店里没货的组合移出 notified，别的位置的门店保持原状
+            notified = {k for k in notified if k[0] not in seen or k in found}
             new = [found[k] for k in found if k not in notified]
             if new:
                 for item in new:
                     log("有货：" + describe(item))
                 bark(f"iPhone Duo 可取货！({len(new)} 项)",
                      "\n".join(describe(i) for i in new), call=True)
-            notified = set(found)
+            notified |= set(found)
         except Exception as exc:  # 网络错误、被限流、格式变化都记下来继续跑
-            failures += 1
-            log(f"查询失败（连续 {failures} 次）：{exc}")
-            if failures >= ERROR_ALERT_AFTER and not error_alerted:
-                bark("iPhone Duo 监控异常", f"连续 {failures} 次查询失败：{exc}", level="active")
+            blocked = isinstance(exc, urllib.error.HTTPError) and exc.code == 541
+            if blocked:
+                wait = BLOCKED_BACKOFF
+            down = time.monotonic() - last_ok
+            log(f"查询失败（已 {down / 60:.0f} 分钟没有成功）：{exc}"
+                + ("，被限流，暂停 5 分钟" if blocked else ""))
+            if down >= ERROR_ALERT_AFTER and not error_alerted:
+                bark("iPhone Duo 监控异常", f"已 {down / 60:.0f} 分钟查询失败：{exc}", level="active")
                 error_alerted = True
-        time.sleep(max(0, interval - (time.monotonic() - started)))
+        time.sleep(max(0, wait - (time.monotonic() - started)))
     log("本次运行时间到，退出（工作流会自动接力下一次运行）")
 
 
