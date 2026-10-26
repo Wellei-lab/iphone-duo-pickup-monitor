@@ -12,3 +12,4 @@ jobs:
       - run: python3 tools/diagnose.py
         env:
           ZIP: ${{ secrets.ZIP }}
+      - run: python3 tools/list_stores.py 10001 11201 11373 10301
