@@ -9,6 +9,7 @@
   INTERVAL       查询间隔秒数，默认 60
   DURATION       本次运行总时长秒数，默认 20700（5 小时 45 分，GitHub 单个任务上限 6 小时）
   MAX_MILES      只提醒这个距离以内的门店，默认 0 表示不限
+  STATES         只提醒这些州的门店，逗号分隔，例如 NY；默认不限
   BARK_SERVER    Bark 服务器，默认 https://api.day.app
   BARK_LEVEL     Bark 通知级别：timeSensitive（默认）/ critical（静音也响）/ active
   TEST_NOTIFY    设为 true 时只发一条测试推送并查询一次库存，然后退出
@@ -84,12 +85,14 @@ def store_distance(store):
     return None
 
 
-def available_items(stores, parts, max_miles):
+def available_items(stores, parts, max_miles, states=()):
     """返回 {(storeNumber, part): 描述字典}，只包含当前可取货的组合。"""
     found = {}
     for store in stores:
         dist = store_distance(store)
         if max_miles and dist is not None and dist > max_miles:
+            continue
+        if states and store.get("state") not in states:
             continue
         for part in parts:
             info = (store.get("partsAvailability") or {}).get(part)
@@ -143,9 +146,9 @@ def describe(item):
     return " · ".join(parts)
 
 
-def check_once(zip_code, parts, max_miles):
+def check_once(zip_code, parts, max_miles, states):
     _, stores = fetch_availability(zip_code, parts)
-    found = available_items(stores, parts, max_miles)
+    found = available_items(stores, parts, max_miles, states)
     log(f"查询 {len(stores)} 家门店，可取货 {len(found)} 项")
     return found
 
@@ -157,11 +160,12 @@ def main():
     interval = int(env("INTERVAL", "60"))
     duration = int(env("DURATION", "20700"))
     max_miles = float(env("MAX_MILES", "0"))
+    states = {s.strip().upper() for s in env("STATES", "").split(",") if s.strip()}
     log(f"开始监控 {', '.join(parts)}，每 {interval} 秒一次")
 
     if env("TEST_NOTIFY", "false").lower() == "true":
         try:
-            found = check_once(zip_code, parts, max_miles)
+            found = check_once(zip_code, parts, max_miles, states)
             body = "\n".join(describe(i) for i in found.values()) or "当前附近门店都不能取货"
         except Exception as exc:
             body = f"查询 Apple 失败：{exc}"
@@ -176,7 +180,7 @@ def main():
     while time.monotonic() < deadline:
         started = time.monotonic()
         try:
-            found = check_once(zip_code, parts, max_miles)
+            found = check_once(zip_code, parts, max_miles, states)
             failures, error_alerted = 0, False
             new = [found[k] for k in found if k not in notified]
             if new:

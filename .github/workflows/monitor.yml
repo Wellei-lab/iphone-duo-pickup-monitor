@@ -57,6 +57,7 @@ jobs:
           ZIP: ${{ secrets.ZIP }}
           PARTS: ${{ vars.PARTS }}
           MAX_MILES: ${{ vars.MAX_MILES || '35' }}
+          STATES: ${{ vars.STATES || 'NY' }}
           BARK_LEVEL: ${{ vars.BARK_LEVEL }}
           BARK_KEY: ${{ secrets.BARK_KEY }}
           TEST_NOTIFY: ${{ inputs.test_notify }}

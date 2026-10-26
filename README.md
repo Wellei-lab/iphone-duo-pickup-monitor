@@ -19,6 +19,7 @@
    - **Secrets** 新建 `ZIP` = 你的美国邮编（用 Secret 而不是 Variable，公开仓库的运行日志所有人可见，Secret 会被打码）
    - 可选 Variables：
      - `MAX_MILES`：只提醒多少英里以内的门店，默认 `35`，填 `0` 表示不限
+     - `STATES`：只提醒哪些州的门店，默认 `NY`（排除长岛对岸的康涅狄格州门店）
      - `PARTS`：改监控型号，逗号分隔
      - `BARK_LEVEL`：`critical` 表示静音/专注模式下也响（需要在 Bark 里允许重要提醒）
 3. **Actions** 页面 → 左侧 *iPhone Duo pickup monitor* → **Run workflow**，勾选 `test_notify` 运行一次。手机收到“iPhone Duo 监控测试”就说明推送和 Apple 查询都通了。
