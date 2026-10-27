@@ -9,7 +9,4 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
-      - run: python3 tools/diagnose.py
-        env:
-          ZIP: ${{ secrets.ZIP }}
-      - run: python3 tools/list_stores.py 10001 11201 11373 10301
+      - run: python3 tools/find_urls.py
