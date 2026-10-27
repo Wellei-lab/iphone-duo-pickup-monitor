@@ -19,6 +19,7 @@
 """
 
 import json
+import re
 import os
 import sys
 import time
@@ -39,6 +40,9 @@ PART_NAMES = {
     "MK1H4LL/A": "iPhone Duo 512GB Night Sky",
 }
 BUY_URL = "https://www.apple.com/shop/buy-iphone/iphone-duo"
+# 点推送直接打开这一款：/shop/product/MK1H4LL/A 会跳到
+# /shop/buy-iphone/iphone-duo/7.6-inch-display-512gb-night-sky（2026-10-27 实测）
+PRODUCT_URL = "https://www.apple.com/shop/product/{part}"
 # fulfillment-messages 接口会对 GitHub 服务器返回 541，旧的 pickup-message 接口可用
 PICKUP_URL = "https://www.apple.com/shop/retail/pickup-message"
 HEADERS = {
@@ -123,11 +127,12 @@ def available_items(stores, parts, max_miles, states=()):
                 "distance": store.get("storeDistanceWithUnit") or (f"{dist} mi" if dist else ""),
                 "title": title,
                 "quote": info.get("pickupSearchQuote") or "",
+                "part": part,
             }
     return found
 
 
-def bark(title, body, level=None, call=False):
+def bark(title, body, level=None, call=False, url=BUY_URL):
     key = env("BARK_KEY", required=True)
     server = env("BARK_SERVER", "https://api.day.app").rstrip("/")
     payload = {
@@ -135,7 +140,7 @@ def bark(title, body, level=None, call=False):
         "title": title,
         "body": body,
         "group": "iPhone Duo",
-        "url": BUY_URL,
+        "url": url,
         "level": level or env("BARK_LEVEL", "timeSensitive"),
     }
     if payload["level"] == "critical":
@@ -151,6 +156,20 @@ def bark(title, body, level=None, call=False):
             log(f"Bark 推送成功：{title}（{resp.status}）")
     except Exception as exc:  # 推送失败不应该让监控停下
         log(f"Bark 推送失败：{exc}")
+
+
+def short_name(item):
+    """"iPhone Duo 512GB Night Sky" -> "Night Sky 512GB"，放在推送标题里。"""
+    name = item["title"].replace("iPhone Duo", "").strip()
+    m = re.match(r"(\d+\s?[GT]B)\s+(.*)", name)
+    return f"{m.group(2)} {m.group(1)}" if m else name
+
+
+def restock_title(items):
+    first = items[0]
+    if len(items) == 1:
+        return f"有货！{first['store']} · {short_name(first)}"
+    return f"有货！{first['store']} 等 {len(items)} 处 · {short_name(first)}"
 
 
 def describe(item):
@@ -246,7 +265,7 @@ def main():
         bark("iPhone Duo 监控测试", body)
         return
 
-    notified = set()  # 已提醒过且仍有货的 (门店, 型号)，没货后移除，下次补货再提醒
+    notified = {}  # 已提醒过且仍有货的 {(门店, 型号): (描述, 首次发现时间)}，卖光后移除，下次补货再提醒
     last_ok = time.monotonic()
     error_alerted = False
     step = 0
@@ -266,15 +285,22 @@ def main():
             found, seen = check_once(loc, label, parts, max_miles, states)
             step += 1
             last_ok, error_alerted = time.monotonic(), False
-            # 这次返回的门店里没货的组合移出 notified，别的位置的门店保持原状
-            notified = {k for k in notified if k[0] not in seen or k in found}
+            # 这次查到的范围内门店里，之前有货、现在没货的就是卖光了；别的位置的门店保持原状
+            sold = [k for k in notified if k[0] in seen and k not in found]
+            for k in sold:
+                item, since = notified.pop(k)
+                minutes = max(1, round((time.monotonic() - since) / 60))
+                log(f"已售罄（约 {minutes} 分钟）：" + describe(item))
+                bark(f"已售罄：{item['store']} · {short_name(item)}",
+                     f"货大约留了 {minutes} 分钟", level="active")
             new = [found[k] for k in found if k not in notified]
             if new:
                 for item in new:
                     log("有货：" + describe(item))
-                bark(f"iPhone Duo 可取货！({len(new)} 项)",
-                     "\n".join(describe(i) for i in new), call=True)
-            notified |= set(found)
+                bark(restock_title(new), "\n".join(describe(i) for i in new), call=True,
+                     url=PRODUCT_URL.format(part=new[0]["part"]))
+            for k in found:
+                notified.setdefault(k, (found[k], time.monotonic()))
         except Exception as exc:  # 网络错误、被限流、格式变化都记下来继续跑
             blocked = isinstance(exc, urllib.error.HTTPError) and exc.code == 541
             if blocked:
