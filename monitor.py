@@ -96,15 +96,20 @@ def store_distance(store):
     return None
 
 
+def in_range(store, max_miles, states=()):
+    dist = store_distance(store)
+    if max_miles and dist is not None and dist > max_miles:
+        return False
+    return not (states and store.get("state") not in states)
+
+
 def available_items(stores, parts, max_miles, states=()):
     """返回 {(storeNumber, part): 描述字典}，只包含当前可取货的组合。"""
     found = {}
     for store in stores:
+        if not in_range(store, max_miles, states):
+            continue
         dist = store_distance(store)
-        if max_miles and dist is not None and dist > max_miles:
-            continue
-        if states and store.get("state") not in states:
-            continue
         for part in parts:
             info = (store.get("partsAvailability") or {}).get(part)
             if not info or info.get("pickupDisplay") != "available":
@@ -192,11 +197,15 @@ def quiet_seconds(quiet, now=None):
 
 
 def check_once(location, label, parts, max_miles, states):
-    """查询一个位置，返回 (可取货 {(门店, 型号): 描述}, 本次返回的门店编号集合)。"""
+    """查询一个位置，返回 (可取货 {(门店, 型号): 描述}, 本次在范围内的门店编号集合)。
+
+    范围外的门店不算“已查过”：同一家店在另一个位置的查询里可能在范围内，
+    否则会被这里误判为没货，下次在另一个位置查到有货时重复提醒。
+    """
     _, stores = fetch_availability(location, parts)
     found = available_items(stores, parts, max_miles, states)
     log(f"查询{label} {len(stores)} 家门店，可取货 {len(found)} 项")
-    return found, {s.get("storeNumber") for s in stores}
+    return found, {s.get("storeNumber") for s in stores if in_range(s, max_miles, states)}
 
 
 def rotation(zip_code, extras):
