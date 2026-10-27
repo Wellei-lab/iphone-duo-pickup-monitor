@@ -9,6 +9,7 @@
   PARTS          要监控的型号，逗号分隔，默认 iPhone Duo 512GB 两种颜色
   INTERVAL       查询间隔秒数，默认 60
   INTERVAL_PLAN  按纽约时间分时段的间隔，例如 0-6:120,6-11:45 表示 0–6 点 120 秒、6–11 点 45 秒，其余用 INTERVAL
+  QUIET_HOURS    纽约时间这几个小时内完全不查询，例如 2-8 表示凌晨 2 点到早上 8 点暂停
   DURATION       本次运行总时长秒数，默认 20700（5 小时 45 分，GitHub 单个任务上限 6 小时）
   MAX_MILES      只提醒这个距离以内的门店，默认 0 表示不限
   STATES         只提醒这些州的门店，逗号分隔，例如 NY；默认不限
@@ -175,6 +176,21 @@ def current_interval(plan, default, now=None):
     return default
 
 
+def quiet_seconds(quiet, now=None):
+    """quiet 为 (开始小时, 结束小时)，支持跨午夜如 (22, 6)。在暂停时段内返回距结束还有多少秒，否则 0。"""
+    if not quiet:
+        return 0
+    now = now or datetime.now(NY_TZ)
+    start, end = quiet
+    inside = start <= now.hour < end if start < end else (now.hour >= start or now.hour < end)
+    if not inside:
+        return 0
+    resume = now.replace(hour=end, minute=0, second=0, microsecond=0)
+    if resume <= now:
+        resume += timedelta(days=1)
+    return (resume - now).total_seconds()
+
+
 def check_once(location, label, parts, max_miles, states):
     """查询一个位置，返回 (可取货 {(门店, 型号): 描述}, 本次返回的门店编号集合)。"""
     _, stores = fetch_availability(location, parts)
@@ -202,10 +218,12 @@ def main():
     parts = [p.strip() for p in env("PARTS", DEFAULT_PARTS).split(",") if p.strip()]
     interval = int(env("INTERVAL", "60"))
     plan = parse_plan(env("INTERVAL_PLAN", ""))
+    quiet_text = env("QUIET_HOURS", "")
+    quiet = tuple(int(h) for h in quiet_text.split("-")) if quiet_text else None
     duration = int(env("DURATION", "20700"))
     max_miles = float(env("MAX_MILES", "0"))
     states = {s.strip().upper() for s in env("STATES", "").split(",") if s.strip()}
-    log(f"开始监控 {', '.join(parts)}，每 {interval} 秒一次，分时段：{plan or '无'}")
+    log(f"开始监控 {', '.join(parts)}，每 {interval} 秒一次，分时段：{plan or '无'}，暂停时段：{quiet_text or '无'}")
 
     if env("TEST_NOTIFY", "false").lower() == "true":
         try:
@@ -225,6 +243,13 @@ def main():
     step = 0
     deadline = time.monotonic() + duration
     while time.monotonic() < deadline:
+        pause = quiet_seconds(quiet)
+        if pause:
+            pause = min(pause, deadline - time.monotonic())
+            log(f"纽约时间 {quiet_text} 点暂停查询，{pause / 60:.0f} 分钟后继续")
+            time.sleep(pause)
+            last_ok = time.monotonic()  # 暂停期间不算查询失败
+            continue
         started = time.monotonic()
         wait = current_interval(plan, interval)
         loc, label = schedule[step % len(schedule)]
