@@ -56,7 +56,8 @@ HEADERS = {
     "Referer": BUY_URL,
 }
 ERROR_ALERT_AFTER = 45 * 60  # 连续这么多秒没有一次查询成功，才推送“监控异常”
-BLOCKED_BACKOFF = 5 * 60  # 被 Apple 限流（HTTP 541）后暂停这么多秒再试
+BLOCKED_BACKOFF = 5 * 60  # 被 Apple 限流（HTTP 541）或服务不可用（503）后暂停这么多秒再试
+BLOCKED_CODES = {541, 503}  # 503 也出现过连续约 30 分钟（2026-10-28 12:40–13:09 纽约时间）
 
 
 def log(msg):
@@ -303,7 +304,7 @@ def main():
             for k in found:
                 notified.setdefault(k, (found[k], time.monotonic()))
         except Exception as exc:  # 网络错误、被限流、格式变化都记下来继续跑
-            blocked = isinstance(exc, urllib.error.HTTPError) and exc.code == 541
+            blocked = isinstance(exc, urllib.error.HTTPError) and exc.code in BLOCKED_CODES
             if blocked:
                 wait = BLOCKED_BACKOFF
             down = time.monotonic() - last_ok
