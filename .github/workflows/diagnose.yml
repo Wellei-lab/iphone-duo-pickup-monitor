@@ -9,4 +9,6 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
-      - run: python3 tools/find_urls.py
+      - run: python3 tools/bark_test.py
+        env:
+          BARK_KEY: ${{ secrets.BARK_KEY }}
