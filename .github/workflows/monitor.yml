@@ -59,10 +59,11 @@ jobs:
           MAX_MILES: ${{ vars.MAX_MILES || '35' }}
           STATES: ${{ vars.STATES || 'NY' }}
           EXTRA_LOCATIONS: ${{ vars.EXTRA_LOCATIONS || '10001' }}
-          # 全天每 60 秒一次，不暂停、不加速：凌晨 1 点多也有补货（2026-10-28）；
-          # 早高峰试过 45 秒，约 40 分钟就被限流 30 分钟
+          # 纽约时间 8–11 点早高峰每 60 秒一次请求，其余时间每 75 秒一次，全天不暂停。
+          # 早高峰试过 45 秒，约 40 分钟就被限流 30 分钟，所以早高峰不再加速
+          INTERVAL: ${{ vars.INTERVAL || '75' }}
+          INTERVAL_PLAN: ${{ vars.INTERVAL_PLAN || '8-11:60' }}
           QUIET_HOURS: ${{ vars.QUIET_HOURS }}
-          INTERVAL_PLAN: ${{ vars.INTERVAL_PLAN }}
           BARK_LEVEL: ${{ vars.BARK_LEVEL }}
           BARK_KEY: ${{ secrets.BARK_KEY }}
           TEST_NOTIFY: ${{ inputs.test_notify }}
