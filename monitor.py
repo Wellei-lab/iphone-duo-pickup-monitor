@@ -40,10 +40,11 @@ PART_NAMES = {
     "MK1H4LL/A": "iPhone Duo 512GB Night Sky",
 }
 BUY_URL = "https://www.apple.com/shop/buy-iphone/iphone-duo"
-# 点推送直接打开购物袋（装了 Apple Store App 时会在 App 里打开）。用户已提前把配置好的机器放进购物袋，
-# 有货时只需选取货门店、结账。不用购物袋时可改回 https://www.apple.com/shop/product/{part}
-# （会跳到这一款的购买页，2026-10-27 实测）
-PRODUCT_URL = "https://www.apple.com/shop/bag"
+# 点推送直接打开 Apple Store App 的购物袋。用户已提前把配置好的机器放进购物袋，有货时只需选取货门店、结账。
+# https://www.apple.com/shop/bag 从 Bark 点开会进 Safari 网页；applestore:// 能直接进 App 的购物袋
+# （Apple 未公开的写法，2026-10-29 实测 applestore://、applestore://bag、本链接都能到 Bag）。
+# 不用购物袋时可改回 https://www.apple.com/shop/product/{part}（会跳到这一款的购买页）
+PRODUCT_URL = "applestore://www.apple.com/shop/bag"
 # fulfillment-messages 接口会对 GitHub 服务器返回 541，旧的 pickup-message 接口可用
 PICKUP_URL = "https://www.apple.com/shop/retail/pickup-message"
 HEADERS = {
