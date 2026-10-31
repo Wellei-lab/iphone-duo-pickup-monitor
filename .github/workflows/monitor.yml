@@ -1,10 +1,10 @@
 name: iPhone Duo pickup monitor
 
 on:
-  # 每 20 分钟检查一次监控是否在跑；正常情况下由上一轮运行结束时接力启动，
-  # 这里只是兜底（接力断了、第一次启动）
-  schedule:
-    - cron: "7,27,47 * * * *"
+  # 已停用（2026-10-31 已买到）：去掉了定时启动和自动接力。
+  # 要重新开始监控，恢复下面的 schedule 和最后的 "Start next run" 步骤，再手动 Run workflow。
+  # schedule:
+  #   - cron: "7,27,47 * * * *"
   workflow_dispatch:
     inputs:
       test_notify:
@@ -67,7 +67,3 @@ jobs:
           BARK_LEVEL: ${{ vars.BARK_LEVEL }}
           BARK_KEY: ${{ secrets.BARK_KEY }}
           TEST_NOTIFY: ${{ inputs.test_notify }}
-
-      - name: Start next run
-        if: ${{ steps.monitor.outcome == 'success' && !inputs.test_notify }}
-        run: gh workflow run monitor.yml --ref "${{ github.ref_name }}" -f chained=true

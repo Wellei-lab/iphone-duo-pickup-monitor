@@ -1,5 +1,7 @@
 # iPhone Duo 取货监控
 
+> **已停用（2026-10-31，已买到）。** 定时启动和自动接力已从工作流里去掉。要重新启用，恢复 `.github/workflows/monitor.yml` 里的 `schedule` 和 `Start next run` 步骤，再手动 Run workflow。
+
 在 GitHub Actions 上每 60 秒查询一次附近美国 Apple Store 的到店取货（Pickup）库存，有货时通过 [Bark](https://bark.day.app) 推送到 iPhone，铃声连响 30 秒。
 
 默认监控 iPhone Duo 512GB 两种颜色：
